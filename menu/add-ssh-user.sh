@@ -72,6 +72,7 @@ SSH (WS|SSL)
   - Hostname  : ${HOSTNAME_VAL}
   - Ws ports  : 80, 8080, 8880
   - Tls port  : 443
+  - Payload   : GET / HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgrade[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]
 ================================
 DNSTT (SlowDNS):
   - Nameserver : ${NS_DOMAIN}
