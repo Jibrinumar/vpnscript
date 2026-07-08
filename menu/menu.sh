@@ -73,29 +73,29 @@ while true; do
   draw_header
 
   # two-column menu
-  printf "  ${B}[1]${X} SSH / DNS Menu       ${B}[6]${X} List All Users\n"
-  printf "  ${B}[2]${X} VMess Menu           ${B}[7]${X} Running Services\n"
-  printf "  ${B}[3]${X} VLESS Menu           ${B}[8]${X} Restart All\n"
-  printf "  ${B}[4]${X} Trojan Menu          ${B}[9]${X} Settings\n"
-  printf "  ${B}[5]${X} SS Menu              ${B}[0]${X} Exit\n"
+  printf "  ${B}[1]${X} SSH / DNS Menu       ${B}[6]${X}  Settings\n"
+  printf "  ${B}[2]${X} VMess Menu           ${B}[7]${X}  Running Service\n"
+  printf "  ${B}[3]${X} VLESS Menu           ${B}[8]${X}  Bot & Api Setup\n"
+  printf "  ${B}[4]${X} Trojan Menu          ${B}[9]${X}  Security Mgt\n"
+  printf "  ${B}[5]${X} SS Menu              ${B}[10]${X} WebMin\n"
+  echo ""
+  printf "  ${B}[0]${X} Exit\n"
   echo ""
   printf '%s\n' "==================================================="
   read -rp " Choose an option: " opt
 
   case "$opt" in
-    1) bash "$BASE/menu-ssh.sh" ;;
-    2) bash "$BASE/menu-xray.sh" vmess ;;
-    3) bash "$BASE/menu-xray.sh" vless ;;
-    4) echo "Trojan — not built yet (needs Xray inbound + nginx path)."; pause ;;
-    5) echo "Shadowsocks — not built yet (needs Xray inbound)."; pause ;;
-    6) bash "$BASE/list-users.sh" ; pause ;;
-    7) systemctl --no-pager --type=service | grep -E 'xray|nginx|dropbear|ws-proxy|slowdns' ; pause ;;
-    8) echo ">>> Restarting all services..."
-       for u in xray nginx dropbear ws-proxy slowdns; do
-         systemctl restart "$u" && echo "  $u restarted"
-       done ; pause ;;
-    9) echo "Settings — not built yet." ; pause ;;
-    0) clear; exit 0 ;;
-    *) echo "Invalid option."; sleep 1 ;;
+    1)  bash "$BASE/menu-ssh.sh" ;;
+    2)  bash "$BASE/menu-xray.sh" vmess ;;
+    3)  bash "$BASE/menu-xray.sh" vless ;;
+    4)  echo "Trojan — not built yet (needs Xray inbound + nginx path)."; pause ;;
+    5)  echo "Shadowsocks — not built yet (needs Xray inbound)."; pause ;;
+    6)  bash "$BASE/menu-settings.sh" ;;
+    7)  systemctl --no-pager --type=service | grep -E 'xray|nginx|dropbear|ws-proxy|slowdns' ; pause ;;
+    8)  echo "Bot & Api Setup — not built yet." ; pause ;;
+    9)  echo "Security Mgt — not built yet." ; pause ;;
+    10) echo "WebMin — not built yet." ; pause ;;
+    0)  clear; exit 0 ;;
+    *)  echo "Invalid option."; sleep 1 ;;
   esac
 done
