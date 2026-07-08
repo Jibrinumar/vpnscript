@@ -11,7 +11,7 @@ fi
 # ---- sources for the card ----
 DOMAIN_FILE="/etc/vpn-script/domain"          # saved once at install
 SLOWDNS_DIR="/etc/vpn-script/slowdns"
-SLOWDNS_SERVICE="/etc/systemd/system/slowdns.service"
+NS_DOMAIN_FILE="/etc/vpn-script/ns-domain"    # saved once at install
 
 SERVER_IP="$(curl -s https://api.ipify.org || hostname -I | awk '{print $1}')"
 
@@ -22,11 +22,12 @@ else
   HOSTNAME_VAL="$SERVER_IP"
 fi
 
-# SlowDNS nameserver: pull the domain baked into the service file (last arg before target)
-NS_DOMAIN="$(grep -oE '[a-zA-Z0-9.-]+' "$SLOWDNS_SERVICE" 2>/dev/null \
-  | grep -E '\.' | grep -v '127.0.0.1' | grep -v 'dnstt-server' \
-  | grep -vE '^(privkey|server|key|pem)$' | tail -1)"
-[[ -z "${NS_DOMAIN:-}" ]] && NS_DOMAIN="(not set)"
+# SlowDNS nameserver: read from its own file (reliable, no parsing)
+if [[ -f "$NS_DOMAIN_FILE" && -s "$NS_DOMAIN_FILE" ]]; then
+  NS_DOMAIN="$(cat "$NS_DOMAIN_FILE")"
+else
+  NS_DOMAIN="(not set)"
+fi
 
 # SlowDNS public key
 if [[ -f "$SLOWDNS_DIR/server.pub" ]]; then
