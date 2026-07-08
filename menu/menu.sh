@@ -73,11 +73,11 @@ while true; do
   draw_header
 
   # two-column menu
-  printf "  ${B}[1]${X} SSH / DNS Menu       ${B}[6]${X} List Users\n"
-  printf "  ${B}[2]${X} Add VMess User       ${B}[7]${X} Running Services\n"
-  printf "  ${B}[3]${X} Add VLESS User       ${B}[8]${X} Restart All\n"
-  printf "  ${B}[4]${X} Delete User          ${B}[9]${X} Settings\n"
-  printf "  ${B}[5]${X} Renew User           ${B}[0]${X} Exit\n"
+  printf "  ${B}[1]${X} SSH / DNS Menu       ${B}[6]${X} List All Users\n"
+  printf "  ${B}[2]${X} VMess Menu           ${B}[7]${X} Running Services\n"
+  printf "  ${B}[3]${X} VLESS Menu           ${B}[8]${X} Restart All\n"
+  printf "  ${B}[4]${X} Trojan Menu          ${B}[9]${X} Settings\n"
+  printf "  ${B}[5]${X} SS Menu              ${B}[0]${X} Exit\n"
   echo ""
   printf '%s\n' "==================================================="
   read -rp " Choose an option: " opt
@@ -86,8 +86,8 @@ while true; do
     1) bash "$BASE/menu-ssh.sh" ;;
     2) bash "$BASE/menu-xray.sh" vmess ;;
     3) bash "$BASE/menu-xray.sh" vless ;;
-    4) bash "$BASE/del-user.sh" ; pause ;;
-    5) bash "$BASE/renew-user.sh" ; pause ;;
+    4) echo "Trojan — not built yet (needs Xray inbound + nginx path)."; pause ;;
+    5) echo "Shadowsocks — not built yet (needs Xray inbound)."; pause ;;
     6) bash "$BASE/list-users.sh" ; pause ;;
     7) systemctl --no-pager --type=service | grep -E 'xray|nginx|dropbear|ws-proxy|slowdns' ; pause ;;
     8) echo ">>> Restarting all services..."
