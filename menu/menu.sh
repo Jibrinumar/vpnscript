@@ -1,71 +1,100 @@
 #!/bin/bash
 # VPN-Starter-Kit :: menu/menu.sh
 # Main interactive dashboard. Installed path: /etc/vpn-script/menu/menu.sh
-# Reached globally by the `menu` command (symlinked in the install stage).
+# Reached globally by the `menu` command.
 set -uo pipefail
 
 BASE="/etc/vpn-script/menu"
+INSTALL_DIR="/etc/vpn-script"
 
-# --- must be root: user creation, systemctl all need it ---
 if [[ $EUID -ne 0 ]]; then
   echo "Please run as root:  sudo menu"
   exit 1
 fi
 
+# ---- colors ----
+G=$'\e[32m'; R=$'\e[31m'; Y=$'\e[33m'; C=$'\e[36m'; B=$'\e[1m'; D=$'\e[2m'; X=$'\e[0m'
+
 pause() { read -rp $'\nPress Enter to return to menu...' _; }
 
-service_status() {
-  # prints ● active / ○ dead for a unit, padded
+# ---- helpers for the header ----
+svc() {
+  # svc <unit> <label>  -> prints "Label: Active|Inactive" colored
   local unit="$1" label="$2"
-  if systemctl is-active --quiet "$unit"; then
-    printf "  %-10s : \e[32m● active\e[0m\n" "$label"
+  if systemctl is-active --quiet "$unit" 2>/dev/null; then
+    printf "%s: %sActive%s" "$label" "$G" "$X"
   else
-    printf "  %-10s : \e[31m○ down\e[0m\n" "$label"
+    printf "%s: %sInactive%s" "$label" "$R" "$X"
   fi
 }
 
-restart_all() {
-  echo ">>> Restarting services..."
-  systemctl restart xray        && echo "  xray      restarted"
-  systemctl restart nginx       && echo "  nginx     restarted"
-  systemctl restart dropbear    && echo "  dropbear  restarted"
-  systemctl restart ws-proxy    && echo "  ws-proxy  restarted"
-  systemctl restart slowdns     && echo "  slowdns   restarted"
+line() { printf '%s\n' "=============== $1 ==============="; }
+
+draw_header() {
+  clear
+
+  # --- SERVER INFO ---
+  local uptime_str ip os ram_used ram_total cpu domain nsdomain
+  uptime_str="$(uptime -p 2>/dev/null | sed 's/^up //')"
+  [[ -z "$uptime_str" ]] && uptime_str="n/a"
+  ip="$(curl -s --max-time 3 https://api.ipify.org || hostname -I | awk '{print $1}')"
+  os="$( . /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-Unknown}" ) ( $(uname -m) )"
+  ram_total="$(free -m | awk '/^Mem:/{print $2}')"
+  ram_used="$(free -m | awk '/^Mem:/{print $3}')"
+  cpu="$(top -bn1 | awk '/Cpu\(s\)/{printf "%.0f", $2+$4}')"
+  domain="$(cat "$INSTALL_DIR/domain" 2>/dev/null)";      [[ -z "$domain" ]]   && domain="(not set)"
+  nsdomain="$(cat "$INSTALL_DIR/ns-domain" 2>/dev/null)"; [[ -z "$nsdomain" ]] && nsdomain="(not set)"
+
+  line "SERVER INFO"
+  echo ""
+  printf "Server Uptime      = %s\n" "$uptime_str"
+  printf "Server IP          = %s%s%s\n" "$C" "$ip" "$X"
+  printf "Operating System   = %s\n" "$os"
+  printf "Cloudflare Domain  = %s%s%s\n" "$C" "$domain" "$X"
+  printf "NS Domain          = %s%s%s\n" "$C" "$nsdomain" "$X"
+  printf "Ram Usage          = %s MB / %s MB\n" "$ram_used" "$ram_total"
+  printf "CPU Usage          = %s %%\n" "$cpu"
+  printf "Time Reboot VPS    = %sNot set%s\n" "$D" "$X"
+
+  # --- ACTIVE SERVICE ---
+  echo ""
+  line "ACTIVE SERVICE"
+  echo ""
+  printf "  %s | %s | %s\n" "$(svc ssh SSH)" "$(svc nginx Nginx)" "$(svc dropbear Dropbear)"
+  printf "  %s | %s | %s\n" "$(svc slowdns Slowdns)" "$(svc xray Xray)" "$(svc ws-proxy SSH-WS)"
+
+  # --- CONTROL MANAGER ---
+  echo ""
+  line "CONTROL MANAGER"
+  echo ""
 }
 
 while true; do
-  clear
-  echo "==========================================="
-  echo "            VPN MANAGER  v1.0"
-  echo "==========================================="
-  service_status xray     "Xray"
-  service_status nginx    "Nginx"
-  service_status dropbear "Dropbear"
-  service_status ws-proxy "SSH-WS"
-  service_status slowdns  "SlowDNS"
-  echo "-------------------------------------------"
-  echo "  XRAY USERS"
-  echo "   [1] Add VLESS user"
-  echo "   [2] Add VMess user"
+  draw_header
+
+  # two-column menu
+  printf "  ${B}[1]${X} SSH / DNS Menu       ${B}[6]${X} List Users\n"
+  printf "  ${B}[2]${X} Add VMess User       ${B}[7]${X} Running Services\n"
+  printf "  ${B}[3]${X} Add VLESS User       ${B}[8]${X} Restart All\n"
+  printf "  ${B}[4]${X} Delete User          ${B}[9]${X} Settings\n"
+  printf "  ${B}[5]${X} Renew User           ${B}[0]${X} Exit\n"
   echo ""
-  echo "  SSH / SLOWDNS USERS   (one account = both)"
-  echo "   [3] Add SSH/DNS user"
-  echo ""
-  echo "  SYSTEM"
-  echo "   [4] Restart all services"
-  echo "   [5] Delete user        (coming: File 10)"
-  echo "   [6] List users         (coming: File 11)"
-  echo "   [0] Exit"
-  echo "==========================================="
+  printf '%s\n' "==================================================="
   read -rp " Choose an option: " opt
 
   case "$opt" in
-    1) bash "$BASE/add-user.sh" vless ; pause ;;
-    2) bash "$BASE/add-user.sh" vmess ; pause ;;
-    3) bash "$BASE/add-ssh-user.sh"   ; pause ;;
-    4) restart_all                    ; pause ;;
-    5) echo "Not built yet (File 10)."; pause ;;
-    6) echo "Not built yet (File 11)."; pause ;;
+    1) bash "$BASE/menu-ssh.sh" ;;
+    2) bash "$BASE/menu-xray.sh" vmess ;;
+    3) bash "$BASE/menu-xray.sh" vless ;;
+    4) bash "$BASE/del-user.sh" ; pause ;;
+    5) bash "$BASE/renew-user.sh" ; pause ;;
+    6) bash "$BASE/list-users.sh" ; pause ;;
+    7) systemctl --no-pager --type=service | grep -E 'xray|nginx|dropbear|ws-proxy|slowdns' ; pause ;;
+    8) echo ">>> Restarting all services..."
+       for u in xray nginx dropbear ws-proxy slowdns; do
+         systemctl restart "$u" && echo "  $u restarted"
+       done ; pause ;;
+    9) echo "Settings — not built yet." ; pause ;;
     0) clear; exit 0 ;;
     *) echo "Invalid option."; sleep 1 ;;
   esac
