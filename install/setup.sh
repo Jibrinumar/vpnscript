@@ -104,6 +104,9 @@ sed "s|<YOUR_NS_DOMAIN>|${NS_DOMAIN}|g" \
   "$REPO/core/slowdns.service" > /etc/systemd/system/slowdns.service
 bash "$REPO/core/slowdns-redirect.sh"
 
+read -rp "Enter your SlowDNS NS domain (e.g. slow.creebcloud.net): " NS_DOMAIN
+echo "$NS_DOMAIN" > /etc/vpn-script/ns-domain          
+
 # --- free UDP 53 from systemd-resolved so DNS can reach us ---
 echo ">>> Freeing port 53 from systemd-resolved..."
 mkdir -p /etc/systemd/resolved.conf.d
