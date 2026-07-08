@@ -13,8 +13,16 @@ SLOWDNS_DIR="/etc/vpn-script/slowdns"
 BUILD_DIR="/tmp/dnstt-build"
 mkdir -p "$SLOWDNS_DIR"
 
+# A 0-byte binary can linger from an earlier failed download — purge it so the
+# build actually runs instead of trying to execute an empty file.
+if [[ -e "$SLOWDNS_DIR/dnstt-server" && ! -s "$SLOWDNS_DIR/dnstt-server" ]]; then
+  echo ">>> Removing broken/empty dnstt-server from a previous run..."
+  rm -f "$SLOWDNS_DIR/dnstt-server"
+fi
+
 # --- 1. Ensure Go + git are present (only if we still need to build) ---
-if [[ ! -f "$SLOWDNS_DIR/dnstt-server" ]]; then
+# -s = exists AND non-empty; rebuild whenever that's not true.
+if [[ ! -s "$SLOWDNS_DIR/dnstt-server" ]]; then
   if ! command -v go >/dev/null 2>&1; then
     echo ">>> Installing Go toolchain (needed to build dnstt)..."
     export DEBIAN_FRONTEND=noninteractive
@@ -44,6 +52,9 @@ if [[ ! -f "$SLOWDNS_DIR/dnstt-server" ]]; then
   cd / && rm -rf "$BUILD_DIR"
   echo "    built: $SLOWDNS_DIR/dnstt-server"
 fi
+
+# Belt-and-suspenders: make sure it's executable before we run it.
+chmod +x "$SLOWDNS_DIR/dnstt-server"
 
 # --- 4. Generate the server keypair (only once) ---
 if [[ ! -f "$SLOWDNS_DIR/server.key" ]]; then
