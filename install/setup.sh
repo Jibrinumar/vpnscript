@@ -1,5 +1,5 @@
 #!/bin/bash
-# VPN-Starter-Kit :: install/setup.sh  (full orchestrator)
+# VPN-Starter-Kit :: install/setup.sh  (full orchestrator, hardened)
 # Run standalone:
 #   wget -q https://raw.githubusercontent.com/Jibrinumar/vpnscript/main/install/setup.sh && chmod +x setup.sh && sudo bash setup.sh
 # Or from a clone:
@@ -55,7 +55,30 @@ echo ">>> [2/9] Directories + copy project files"
 mkdir -p "$INSTALL_DIR"/{core,menu,slowdns} /var/log/vpn-script
 cp "$REPO/core/"*.py    "$INSTALL_DIR/core/" 2>/dev/null || true
 cp "$REPO/menu/"*.sh    "$INSTALL_DIR/menu/"
-chmod +x "$INSTALL_DIR/menu/"*.sh "$INSTALL_DIR/core/"*.py
+chmod +x "$INSTALL_DIR/menu/"*.sh "$INSTALL_DIR/core/"*.py 2>/dev/null || true
+
+# --- sanity check: critical files must exist AND be non-empty ---
+# ([[ ! -s ]] catches both "missing" and "0 bytes" — the failure that
+#  produced a broken SSH-WS on earlier installs.)
+for f in "$INSTALL_DIR/core/ws.py" \
+         "$INSTALL_DIR/menu/menu.sh" \
+         "$INSTALL_DIR/menu/add-user.sh" \
+         "$INSTALL_DIR/menu/add-ssh-user.sh" \
+         "$REPO/core/config.json" \
+         "$REPO/core/nginx.conf" \
+         "$REPO/core/tls.sh" \
+         "$REPO/core/dropbear.sh" \
+         "$REPO/core/slowdns.sh" \
+         "$REPO/core/slowdns.service" \
+         "$REPO/core/slowdns-redirect.sh"; do
+  if [[ ! -s "$f" ]]; then
+    echo ""
+    echo "FATAL: '$f' is missing or empty."
+    echo "The repo download was incomplete, or that file is empty on GitHub."
+    echo "Aborting so you don't get a half-working install."
+    exit 1
+  fi
+done
 
 # ============================================================
 echo ">>> [3/9] BBR"
@@ -89,7 +112,24 @@ systemctl restart nginx
 echo ">>> [6/9] Dropbear + SSH-WS proxy"
 # ============================================================
 bash "$REPO/core/dropbear.sh"
-install -m 644 "$REPO/core/ws-proxy.service" /etc/systemd/system/ws-proxy.service
+
+# Write the systemd unit INLINE (not copied) so it can never arrive empty
+# from an incomplete download — this was the SSH-WS failure on fresh installs.
+cat > /etc/systemd/system/ws-proxy.service <<'EOF'
+[Unit]
+Description=SSH-over-WebSocket Proxy (VPN-Starter-Kit)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /etc/vpn-script/core/ws.py
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 # ============================================================
 echo ">>> [7/9] SlowDNS (needs your NS domain)"
@@ -130,6 +170,13 @@ if [[ "$NS_DOMAIN" != "CHANGE_ME" ]]; then
 else
   systemctl enable slowdns >/dev/null 2>&1 || true
   echo "  slowdns installed but NOT started (set NS domain, then: systemctl start slowdns)"
+fi
+
+# --- verify SSH-WS actually came up (fail loudly if not) ---
+sleep 1
+if ! systemctl is-active --quiet ws-proxy; then
+  echo ""
+  echo "WARNING: ws-proxy did not start. Check:  journalctl -u ws-proxy -n 20 --no-pager"
 fi
 
 # ============================================================
