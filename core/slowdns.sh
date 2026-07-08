@@ -20,14 +20,41 @@ if [[ -e "$SLOWDNS_DIR/dnstt-server" && ! -s "$SLOWDNS_DIR/dnstt-server" ]]; the
   rm -f "$SLOWDNS_DIR/dnstt-server"
 fi
 
-# --- 1. Ensure Go + git are present (only if we still need to build) ---
+# --- 1. Ensure a MODERN Go + git are present (only if we still need to build) ---
 # -s = exists AND non-empty; rebuild whenever that's not true.
 if [[ ! -s "$SLOWDNS_DIR/dnstt-server" ]]; then
-  if ! command -v go >/dev/null 2>&1; then
-    echo ">>> Installing Go toolchain (needed to build dnstt)..."
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get install -y golang-go git
+
+  # git for the canonical clone (curl fallback covers it if git is missing)
+  command -v git >/dev/null 2>&1 || { export DEBIAN_FRONTEND=noninteractive; apt-get install -y git; }
+
+  # dnstt's deps use the Go 1.21 `clear` builtin. Ubuntu 22.04's apt Go is 1.18
+  # (too old — build fails with "undefined: clear"), so install an official
+  # Go toolchain to /usr/local/go and prefer it on PATH.
+  GO_MIN_MINOR=21
+  need_go=1
+  if command -v go >/dev/null 2>&1; then
+    gv=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | head -1 | sed 's/go//')
+    if [[ -n "$gv" ]]; then
+      gmaj=${gv%%.*}; gmin=${gv##*.}
+      if (( gmaj > 1 || (gmaj == 1 && gmin >= GO_MIN_MINOR) )); then need_go=0; fi
+    fi
   fi
+
+  if (( need_go )); then
+    echo ">>> Installing modern Go toolchain (apt version too old)..."
+    GO_VER="1.22.5"
+    case "$(uname -m)" in
+      x86_64)  GO_ARCH="amd64" ;;
+      aarch64) GO_ARCH="arm64" ;;
+      *) echo "Unsupported architecture: $(uname -m)"; exit 1 ;;
+    esac
+    wget -qO /tmp/go.tar.gz "https://go.dev/dl/go${GO_VER}.linux-${GO_ARCH}.tar.gz" \
+      || { echo "Go download failed. Check network settings."; exit 1; }
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf /tmp/go.tar.gz
+    rm -f /tmp/go.tar.gz
+  fi
+  export PATH="/usr/local/go/bin:$PATH"
 
   # --- 2. Fetch source: canonical bamsoftware first, GitHub mirror as fallback ---
   rm -rf "$BUILD_DIR"; mkdir -p "$BUILD_DIR"; cd "$BUILD_DIR"
