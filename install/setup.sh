@@ -36,8 +36,8 @@ if [[ $EUID -ne 0 ]]; then
   echo "Please run as root:  sudo -i  then re-run."
   exit 1
 fi
-if ! grep -q "24.04" /etc/os-release; then
-  echo "Warning: tuned for Ubuntu 24.04. Continuing in 3s..."; sleep 3
+if ! grep -qE "24.04|22.04" /etc/os-release; then
+  echo "Warning: tested on Ubuntu 22.04 / 24.04. Continuing in 3s..."; sleep 3
 fi
 
 export DEBIAN_FRONTEND=noninteractive
@@ -73,15 +73,17 @@ bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release
 install -m 644 "$REPO/core/config.json" /usr/local/etc/xray/config.json
 
 # ============================================================
-echo ">>> [5/9] Nginx front door"
+echo ">>> [5/9] TLS cert + Nginx front door (80 / 8080 / 443)"
 # ============================================================
+# Cert MUST be created before nginx -t, or the 443 ssl block fails the test.
+read -rp "Enter your TLS/WS domain (e.g. vpn.grab2.eu.cc), blank for self-signed: " WS_DOMAIN
+echo "${WS_DOMAIN:-}" > "$INSTALL_DIR/domain"
+bash "$REPO/core/tls.sh" "${WS_DOMAIN:-}"
+
 install -m 644 "$REPO/core/nginx.conf" /etc/nginx/conf.d/vpn.conf
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 nginx -t
-
-read -rp "Enter your TLS/WS domain (e.g. vpn.grab2.eu.cc), or leave blank for self-signed: " WS_DOMAIN
-echo "${WS_DOMAIN:-}" > /etc/vpn-script/domain          # <-- add this
-bash "$REPO/core/tls.sh" "${WS_DOMAIN:-}"
+systemctl restart nginx
 
 # ============================================================
 echo ">>> [6/9] Dropbear + SSH-WS proxy"
@@ -99,13 +101,11 @@ if [[ -z "$NS_DOMAIN" ]]; then
   echo "No NS domain given — SlowDNS service will be installed but left disabled."
   NS_DOMAIN="CHANGE_ME"
 fi
-# bake the domain into the service unit
+# bake the domain into the service unit, and save it for the account card
 sed "s|<YOUR_NS_DOMAIN>|${NS_DOMAIN}|g" \
   "$REPO/core/slowdns.service" > /etc/systemd/system/slowdns.service
+echo "$NS_DOMAIN" > "$INSTALL_DIR/ns-domain"
 bash "$REPO/core/slowdns-redirect.sh"
-
-read -rp "Enter your SlowDNS NS domain (e.g. slow.creebcloud.net): " NS_DOMAIN
-echo "$NS_DOMAIN" > /etc/vpn-script/ns-domain          
 
 # --- free UDP 53 from systemd-resolved so DNS can reach us ---
 echo ">>> Freeing port 53 from systemd-resolved..."
@@ -122,6 +122,8 @@ systemctl restart systemd-resolved || true
 echo ">>> [8/9] Enable + start all services"
 # ============================================================
 systemctl daemon-reload
+# guard against a stale mask from any earlier partial run
+systemctl unmask ws-proxy 2>/dev/null || true
 systemctl enable --now xray nginx dropbear ws-proxy >/dev/null 2>&1 || true
 if [[ "$NS_DOMAIN" != "CHANGE_ME" ]]; then
   systemctl enable --now slowdns >/dev/null 2>&1 || true
@@ -137,14 +139,18 @@ ln -sf "$INSTALL_DIR/menu/menu.sh" /usr/local/bin/menu
 chmod +x /usr/local/bin/menu
 
 SERVER_IP=$(curl -s https://api.ipify.org || echo "your-server-ip")
+WS_HOST="$(cat "$INSTALL_DIR/domain" 2>/dev/null)"
+[[ -z "$WS_HOST" ]] && WS_HOST="$SERVER_IP"
+
 echo ""
 echo "==================================================="
 echo " INSTALL COMPLETE"
 echo "==================================================="
 echo "  Server IP   : $SERVER_IP"
-echo "  Xray VLESS  : ${SERVER_IP}:80  path /vless"
-echo "  Xray VMess  : ${SERVER_IP}:80  path /vmess"
-echo "  SSH-WS      : ${SERVER_IP}:8880"
+echo "  WS host     : $WS_HOST"
+echo "  Xray VLESS  : path /vless   (ports 80, 8080, 443/tls)"
+echo "  Xray VMess  : path /vmess   (ports 80, 8080, 443/tls)"
+echo "  SSH-WS      : ports 80, 8080, 8880  + 443/tls"
 echo "  SlowDNS NS  : ${NS_DOMAIN}"
 echo ""
 echo "  SlowDNS public key:"
