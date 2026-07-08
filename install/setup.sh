@@ -79,6 +79,10 @@ install -m 644 "$REPO/core/nginx.conf" /etc/nginx/conf.d/vpn.conf
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
 nginx -t
 
+read -rp "Enter your TLS/WS domain (e.g. vpn.grab2.eu.cc), or leave blank for self-signed: " WS_DOMAIN
+echo "${WS_DOMAIN:-}" > /etc/vpn-script/domain          # <-- add this
+bash "$REPO/core/tls.sh" "${WS_DOMAIN:-}"
+
 # ============================================================
 echo ">>> [6/9] Dropbear + SSH-WS proxy"
 # ============================================================
